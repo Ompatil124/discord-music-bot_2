@@ -75,7 +75,7 @@ function linkRow(config) {
     buttons.push(new ButtonBuilder().setLabel("Support server").setEmoji(emoji.info).setURL(config.links.support).setStyle(ButtonStyle.Link));
   }
   if (isHttpUrl(config.links?.invite)) {
-    buttons.push(new ButtonBuilder().setLabel("Invite om_music_bot").setEmoji(emoji.home).setURL(config.links.invite).setStyle(ButtonStyle.Link));
+    buttons.push(new ButtonBuilder().setLabel("Invite ♫ DC MUSIC").setEmoji(emoji.home).setURL(config.links.invite).setStyle(ButtonStyle.Link));
   }
   return buttons.length ? new ActionRowBuilder().addComponents(buttons) : null;
 }
@@ -98,7 +98,7 @@ function homeView(client, requester, groups, disabled = false) {
   const ping = Math.max(0, Math.round(client.ws?.ping || 0));
 
   const card = container()
-    .addTextDisplayComponents(text(`## om_music_bot\n-# ${count} commands · ${groups.size} categories`))
+    .addTextDisplayComponents(text(`## ♫ DC MUSIC\n-# ${count} commands · ${groups.size} categories`))
     .addSeparatorComponents(separator())
     .addTextDisplayComponents(text(
       `**Status**  \`${status}\`   **Ping**  \`${ping} ms\`   **Uptime**  \`${compactUptime(client.uptime)}\``,

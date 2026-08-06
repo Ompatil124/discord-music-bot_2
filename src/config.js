@@ -27,7 +27,7 @@ const config = {
     BG: process.env.BACKGROUND_URL || "",
     support: process.env.SUPPORT_URL || "",
     invite: process.env.INVITE_URL || "",
-    Shafed_Billa: "om_music_bot",
+    Shafed_Billa: "♫ DC MUSIC",
     power: "developed by ompatil",
     vanity: process.env.VANITY_URL || "",
     guild: process.env.COMMUNITY_GUILD_ID || "",
@@ -58,7 +58,7 @@ const config = {
     reconnectInterval: 5,
     restTimeout: 60_000,
     voiceConnectionTimeout: 30_000,
-    userAgent: "om_music_bot",
+    userAgent: "DC MUSIC",
   },
 };
 

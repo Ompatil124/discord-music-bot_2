@@ -33,7 +33,7 @@ manager.on("clusterCreate", (cluster) => {
 // om_music_bot Banner
 console.log(`\x1b[36m
    /\\_/\\  
-  ( o.o )  OM_MUSIC_BOT
+  ( o.o )  ♫ DC MUSIC
    > ^ <   Music System
 \x1b[0m`);
 Logger.ready("System Initialized! Spawning Clusters...");
