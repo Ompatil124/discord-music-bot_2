@@ -50,27 +50,10 @@ module.exports = {
       console.log("\nWARNING: No slash commands to deploy! client.slashCommands.size = 0\n");
     }
 
-    setInterval(() => {
-      const totalMembers = client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
-      const statuses = [
-        `Serving ${client.guilds.cache.size} Servers • ${totalMembers} Users`,
-        `MnaX • High Quality Music`,
-        `/help • 24/7 Audio System`,
-        `Vibing with ${totalMembers} Users`
-      ];
-
-      const status = statuses[Math.floor(Math.random() * statuses.length)];
-
-      client.user.setPresence({
-        activities: [
-          {
-            name: status,
-            type: ActivityType.Custom,
-          },
-        ],
-        status: "online",
-      });
-    }, 10000);
+    client.user.setPresence({
+      activities: [],
+      status: "online",
+    });
 
     try {
       setTimeout(async () => {

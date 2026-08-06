@@ -92,7 +92,7 @@ module.exports = {
   },
 
   async slashExecute(interaction, client) {
-    const query = interaction.options.getString("song");
+    let query = interaction.options.getString("song");
 
     await interaction.deferReply();
 
@@ -211,29 +211,47 @@ module.exports = {
         }
       }
 
-      const isUrl = /^https?:\/\//.test(query) ||
-        query.includes("youtube.com") ||
-        query.includes("youtu.be") ||
+      let isUrl = /^https?:\/\//.test(query) ||
         query.includes("music.apple.com") ||
         query.includes("spotify.com") ||
         query.includes("deezer.com") ||
         query.includes("jiosaavn.com");
 
+      let bypassEngine = null;
+      // YouTube IP Block Bypass: If it's a direct YouTube link, use oEmbed API to extract title safely
+      if (query.includes("youtube.com") || query.includes("youtu.be")) {
+          try {
+              const encodedUrl = encodeURIComponent(query);
+              const res = await fetch(`https://www.youtube.com/oembed?url=${encodedUrl}&format=json`);
+              if (res.ok) {
+                  const data = await res.json();
+                  if (data && data.title) {
+                      query = data.title;
+                      isUrl = false;
+                      bypassEngine = 'ytsearch';
+                      console.log(`[YouTube Bypass] Converted URL to search query: ${query}`);
+                  }
+              }
+          } catch (e) {
+              console.error("[YouTube Bypass] Failed to extract title via oEmbed:", e);
+          }
+      }
+
       let searchResult;
       try {
         searchResult = await client.manager.search(query, {
           requester: interaction.user,
-          engine: isUrl ? undefined : 'ytmsearch'
+          engine: isUrl ? undefined : (bypassEngine || 'ytmsearch')
         });
       } catch (searchError) {
         const { handleSessionError, recreatePlayer } = require("../../utils/playerUtils");
 
-        if (await handleSessionError(searchError, player, client)) {
+          if (await handleSessionError(searchError, player, client)) {
           try {
             player = await recreatePlayer(client, interaction.guild.id, channel.id, interaction.channel.id);
             searchResult = await client.manager.search(query, {
               requester: interaction.user,
-              engine: isUrl ? undefined : 'ytmsearch'
+              engine: isUrl ? undefined : (bypassEngine || 'ytmsearch')
             });
           } catch (retryError) {
             console.error("Search retry error:", retryError);
@@ -591,27 +609,47 @@ module.exports = {
     let searchOptions = {};
 
     if (query) {
-      const isUrl = /^https?:\/\//.test(query) ||
-        query.includes("youtube.com") ||
-        query.includes("youtu.be") ||
+      let isUrl = /^https?:\/\//.test(query) ||
         query.includes("music.apple.com") ||
         query.includes("spotify.com") ||
         query.includes("deezer.com") ||
         query.includes("jiosaavn.com");
+
+      let bypassEngine = null;
+      // YouTube IP Block Bypass: If it's a direct YouTube link, use oEmbed API to extract title safely
+      if (query.includes("youtube.com") || query.includes("youtu.be")) {
+          try {
+              const encodedUrl = encodeURIComponent(query);
+              const res = await fetch(`https://www.youtube.com/oembed?url=${encodedUrl}&format=json`);
+              if (res.ok) {
+                  const data = await res.json();
+                  if (data && data.title) {
+                      query = data.title;
+                      isUrl = false;
+                      bypassEngine = 'ytsearch';
+                      console.log(`[YouTube Bypass] Converted URL to search query: ${query}`);
+                  }
+              }
+          } catch (e) {
+              console.error("[YouTube Bypass] Failed to extract title via oEmbed:", e);
+          }
+      }
 
       if (isUrl) {
         searchOptions.engine = undefined;
       } else {
         try {
           const userPref = await UserPreferences.findOne({ userId: message.author.id });
-          if (userPref && userPref.musicSource) {
+          if (bypassEngine) {
+            searchOptions.engine = bypassEngine;
+          } else if (userPref && userPref.musicSource) {
             searchOptions.engine = userPref.musicSource;
           } else {
             searchOptions.engine = 'ytmsearch';
           }
         } catch (error) {
           console.error("Error fetching user preference:", error);
-          searchOptions.engine = 'ytmsearch';
+          searchOptions.engine = bypassEngine || 'ytmsearch';
         }
       }
     }
