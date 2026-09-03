@@ -11,6 +11,7 @@ const {
   PermissionsBitField
 } = require("discord.js");
 const UserPreferences = require("../../schema/userpreferences");
+const config = require("../../config");
 
 module.exports = {
   name: "play",
@@ -52,7 +53,23 @@ module.exports = {
     }
 
     try {
-      let searchEngine = 'ytmsearch';
+      if (client.config?.youtubeAPIKey) {
+        const { searchYouTubeApi } = require("../../utils/youtubeApi");
+        const apiTracks = await searchYouTubeApi(focusedValue, client.config.youtubeAPIKey, 10);
+        if (apiTracks.length > 0) {
+          const choices = apiTracks.slice(0, 25).map(track => {
+            const title = (track.title || 'Unknown').substring(0, 75);
+            const author = (track.author || 'Unknown').substring(0, 20);
+            return {
+              name: `${title} - ${author}`,
+              value: track.uri
+            };
+          });
+          return await interaction.respond(choices).catch(() => {});
+        }
+      }
+
+      let searchEngine = config.node_source || 'scsearch';
 
       const searchPromise = client.manager.search(focusedValue, {
         engine: searchEngine,
@@ -162,15 +179,21 @@ module.exports = {
         } catch (createError) {
           console.error("Player creation error:", createError);
 
-          if (createError.status === 404 && createError.message && createError.message.includes('Session not found')) {
-            console.log(`Stale session detected for guild ${interaction.guild.id}, cleaning up and retrying...`);
+          const isStaleSession = (createError.status === 404 && createError.message && createError.message.includes('Session not found'))
+            || (createError.message && createError.message.includes('not established'));
 
-            if (client.manager.players.has(interaction.guild.id)) {
-              client.manager.players.delete(interaction.guild.id);
-            }
+          if (isStaleSession) {
+            console.log(`Stale/timed-out connection for guild ${interaction.guild.id}, cleaning up and retrying...`);
+
+            // Destroy stale player fully before retrying
+            try {
+              const stale = client.manager.players.get(interaction.guild.id);
+              if (stale) await stale.destroy().catch(() => {});
+            } catch {}
+            client.manager.players.delete(interaction.guild.id);
 
             try {
-              await new Promise(resolve => setTimeout(resolve, 500));
+              await new Promise(resolve => setTimeout(resolve, 1000));
 
               player = await client.manager.createPlayer({
                 guildId: interaction.guild.id,
@@ -218,6 +241,21 @@ module.exports = {
         query.includes("jiosaavn.com");
 
       let bypassEngine = null;
+
+      // If text search and YouTube API key exists, resolve exact track title from official API
+      if (!isUrl && client.config?.youtubeAPIKey) {
+        try {
+          const { searchYouTubeApi } = require("../../utils/youtubeApi");
+          const apiTracks = await searchYouTubeApi(query, client.config.youtubeAPIKey, 1);
+          if (apiTracks.length > 0 && apiTracks[0].title) {
+            console.log(`[YouTube API] Resolved "${query}" -> "${apiTracks[0].title}"`);
+            query = apiTracks[0].title;
+          }
+        } catch (apiErr) {
+          console.error("[YouTube API] Resolution failed:", apiErr.message);
+        }
+      }
+
       // YouTube IP Block Bypass: If it's a direct YouTube link, use oEmbed API to extract title safely
       if (query.includes("youtube.com") || query.includes("youtu.be")) {
           try {
@@ -241,7 +279,7 @@ module.exports = {
       try {
         searchResult = await client.manager.search(query, {
           requester: interaction.user,
-          engine: isUrl ? undefined : (bypassEngine || 'ytmsearch')
+          engine: isUrl ? undefined : (bypassEngine || config.node_source || 'scsearch')
         });
       } catch (searchError) {
         const { handleSessionError, recreatePlayer } = require("../../utils/playerUtils");
@@ -251,7 +289,7 @@ module.exports = {
             player = await recreatePlayer(client, interaction.guild.id, channel.id, interaction.channel.id);
             searchResult = await client.manager.search(query, {
               requester: interaction.user,
-              engine: isUrl ? undefined : (bypassEngine || 'ytmsearch')
+              engine: isUrl ? undefined : (bypassEngine || config.node_source || 'scsearch')
             });
           } catch (retryError) {
             console.error("Search retry error:", retryError);
@@ -398,12 +436,12 @@ module.exports = {
 
       if (position > 0) {
         const removeButton = new ButtonBuilder()
-          .setCustomId(`remove_${track.identifier}_${position}`)
+          .setCustomId(`remove_${position}`)
           .setLabel('Remove')
           .setStyle(ButtonStyle.Danger);
 
         const playNextButton = new ButtonBuilder()
-          .setCustomId(`playnext_${track.identifier}_${position}`)
+          .setCustomId(`playnext_${position}`)
           .setLabel('Play Next')
           .setStyle(ButtonStyle.Success)
           .setDisabled(position === 1);
@@ -453,8 +491,9 @@ module.exports = {
 
           const parts = buttonInteraction.customId.split('_');
           const action = parts[0];
-          const pos = parseInt(parts.pop());
-          const identifier = parts.slice(1).join('_');
+          const pos = parseInt(parts[1]);
+          // Look up track by queue position (more reliable than identifier match)
+          const identifier = (player && player.queue && player.queue[pos - 1]) ? player.queue[pos - 1].identifier : null;
 
           if (action === 'remove') {
             try {
@@ -616,6 +655,21 @@ module.exports = {
         query.includes("jiosaavn.com");
 
       let bypassEngine = null;
+
+      // If text search and YouTube API key exists, resolve exact track title from official API
+      if (!isUrl && client.config?.youtubeAPIKey) {
+        try {
+          const { searchYouTubeApi } = require("../../utils/youtubeApi");
+          const apiTracks = await searchYouTubeApi(query, client.config.youtubeAPIKey, 1);
+          if (apiTracks.length > 0 && apiTracks[0].title) {
+            console.log(`[YouTube API] Resolved "${query}" -> "${apiTracks[0].title}"`);
+            query = apiTracks[0].title;
+          }
+        } catch (apiErr) {
+          console.error("[YouTube API] Resolution failed:", apiErr.message);
+        }
+      }
+
       // YouTube IP Block Bypass: If it's a direct YouTube link, use oEmbed API to extract title safely
       if (query.includes("youtube.com") || query.includes("youtu.be")) {
           try {
@@ -645,11 +699,11 @@ module.exports = {
           } else if (userPref && userPref.musicSource) {
             searchOptions.engine = userPref.musicSource;
           } else {
-            searchOptions.engine = 'ytmsearch';
+            searchOptions.engine = config.node_source || 'scsearch';
           }
         } catch (error) {
           console.error("Error fetching user preference:", error);
-          searchOptions.engine = bypassEngine || 'ytmsearch';
+          searchOptions.engine = bypassEngine || config.node_source || 'scsearch';
         }
       }
     }
@@ -1042,12 +1096,12 @@ module.exports = {
 
         if (track.position > 0) {
           const removeButton = new ButtonBuilder()
-            .setCustomId(`remove_${track.track.identifier}_${track.position}`)
+            .setCustomId(`remove_${track.position}`)
             .setLabel('Remove')
             .setStyle(ButtonStyle.Danger);
 
           const playNextButton = new ButtonBuilder()
-            .setCustomId(`playnext_${track.track.identifier}_${track.position}`)
+            .setCustomId(`playnext_${track.position}`)
             .setLabel('Play Next')
             .setStyle(ButtonStyle.Success)
             .setDisabled(track.position === 1);
@@ -1085,8 +1139,9 @@ module.exports = {
 
             const parts = interaction.customId.split('_');
             const action = parts[0];
-            const pos = parseInt(parts.pop());
-            const identifier = parts.slice(1).join('_');
+            const pos = parseInt(parts[1]);
+            // Look up track by queue position (more reliable than identifier match)
+            const identifier = (player && player.queue && player.queue[pos - 1]) ? player.queue[pos - 1].identifier : null;
 
             if (action === 'remove') {
               try {

@@ -19,11 +19,7 @@ const manager = new ClusterManager("./index.js", {
   shardsPerCluster: 1,
   mode: "process",
   token: config.token,
-  respawn: true,
-  restarts: {
-    max: 5,
-    interval: 1000,
-  },
+  respawn: true
 });
 
 manager.on("clusterCreate", (cluster) => {

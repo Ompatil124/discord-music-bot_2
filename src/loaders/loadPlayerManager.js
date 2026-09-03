@@ -45,8 +45,11 @@ module.exports = function loadPlayerManager(client) {
 
     if (isUrl) {
       const directRes = await node.rest.resolve(query).catch(() => null);
-      if (directRes && directRes.loadType !== LoadType.ERROR) {
-        return processSearchResult(directRes, options.requester);
+      if (directRes && directRes.loadType !== LoadType.ERROR && directRes.loadType !== LoadType.EMPTY) {
+        const processed = processSearchResult(directRes, options.requester);
+        if (processed.tracks && processed.tracks.length > 0) {
+          return processed;
+        }
       }
 
       if (query.includes('youtube.com') || query.includes('youtu.be')) {
@@ -57,15 +60,24 @@ module.exports = function loadPlayerManager(client) {
       }
     }
 
+    const { cleanQuery } = require("../utils/searchFilter");
+    const cleaned = cleanQuery(query);
+    const queryVariations = (cleaned && cleaned !== query) ? [query, cleaned] : [query];
+
     let searchEngineList = [options.engine || this.defaultSearchEngine];
     searchEngineList = [...new Set([...searchEngineList, ...fallbackEngines])];
 
-    for (const engine of searchEngineList) {
-      const searchQuery = `${engine}:${query}`;
-      const res = await node.rest.resolve(searchQuery).catch(() => null);
+    for (const q of queryVariations) {
+      for (const engine of searchEngineList) {
+        const searchQuery = `${engine}:${q}`;
+        const res = await node.rest.resolve(searchQuery).catch(() => null);
 
-      if (res && res.loadType !== LoadType.ERROR && res.data) {
-        return processSearchResult(res, options.requester);
+        if (res && res.loadType !== LoadType.ERROR && res.loadType !== LoadType.EMPTY && res.data) {
+          const processed = processSearchResult(res, options.requester);
+          if (processed.tracks && processed.tracks.length > 0) {
+            return processed;
+          }
+        }
       }
     }
 
@@ -85,11 +97,21 @@ module.exports = function loadPlayerManager(client) {
           playlistName: res.data.info.name,
           tracks: res.data.tracks.map((track) => new KazagumoTrack(track, requester))
         };
-      case LoadType.SEARCH:
+      case LoadType.SEARCH: {
+        let tracks = res.data.map((track) => new KazagumoTrack(track, requester));
+        // If standard song tracks (< 15 mins) exist, prioritize them over 1-hour playlist compilations
+        const standardTracks = tracks.filter((t) => {
+          const len = t.length || t.info?.length || 0;
+          return len > 0 && len <= 900000; // <= 15 minutes
+        });
+        if (standardTracks.length > 0) {
+          tracks = standardTracks;
+        }
         return {
           type: "SEARCH",
-          tracks: res.data.map((track) => new KazagumoTrack(track, requester))
+          tracks
         };
+      }
       default:
         return { type: "SEARCH", tracks: [] };
     }

@@ -18,10 +18,11 @@ const config = {
   ownerID: list(process.env.OWNER_IDS),
   SpotifyID: process.env.SPOTIFY_CLIENT_ID || "",
   SpotifySecret: process.env.SPOTIFY_CLIENT_SECRET || "",
+  youtubeAPIKey: process.env.YOUTUBE_API_KEY || "",
   mongourl: process.env.MONGODB_URL || "",
   color: process.env.BOT_COLOR || "#3F4652",
   logs: process.env.LOG_LEVEL || "info",
-  node_source: process.env.LAVALINK_SOURCE || "ytmsearch",
+  node_source: process.env.LAVALINK_SOURCE || "scsearch",
 
   links: {
     BG: process.env.BACKGROUND_URL || "",
@@ -44,7 +45,7 @@ const config = {
 
   nodes: [{
     name: process.env.LAVALINK_NAME || "Primary",
-    url: process.env.LAVALINK_URL || "89.106.84.111:25571",
+    url: process.env.LAVALINK_URL || "localhost:2333",
     auth: process.env.LAVALINK_PASSWORD || "youshallnotpass",
     secure: boolean(process.env.LAVALINK_SECURE),
   }],

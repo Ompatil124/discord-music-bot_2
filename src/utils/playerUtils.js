@@ -72,9 +72,12 @@ async function attemptAutoplay(client, player) {
             client.logger?.log(`[Autoplay] Skipping autoplay due to loop mode "${loopMode}" in guild ${player.guildId}`, "debug");
             return;
         }
-        if (player.queue?.size > 0) return;
-        if (player.playing || player.paused) return;
+        if (player.queue?.size > 0 && player.queue?.current && player.playing) return;
         if (player.data?.get("autoplayInProgress")) return;
+
+        const lastAutoplayTime = player.data?.get("lastAutoplayTime") || 0;
+        if (Date.now() - lastAutoplayTime < 400) return;
+        player.data?.set("lastAutoplayTime", Date.now());
 
         player.data?.set("autoplayInProgress", true);
 

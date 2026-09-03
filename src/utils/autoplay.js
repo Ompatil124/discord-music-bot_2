@@ -45,40 +45,51 @@ function isSameSong(first, second) {
 }
 
 function selectAutoplayCandidate(source, tracks, recentKeys = []) {
+  if (!Array.isArray(tracks) || tracks.length === 0) return null;
   const blocked = new Set(recentKeys);
-  return (tracks || []).find((track) =>
+
+  // 1. Try finding a fresh track not in recent history
+  const freshCandidate = tracks.find((track) =>
     track?.title &&
     !isSameSong(source, track) &&
-    !trackKeys(track).some((key) => blocked.has(key)),
-  ) || null;
+    !trackKeys(track).some((key) => blocked.has(key))
+  );
+
+  if (freshCandidate) return freshCandidate;
+
+  // 2. Fallback: pick any track that isn't the exact same track currently playing
+  return tracks.find((track) => track?.title && !isSameSong(source, track)) || tracks[0] || null;
 }
 
 function buildAutoplaySearches(track) {
-  const yId = youtubeId(track?.uri) || (track?.sourceName === 'youtube' ? track?.identifier : null);
-  const sId = spotifyId(track?.uri) || (track?.sourceName === 'spotify' ? track?.identifier : null);
-
   const searches = [];
-  
+  const author = normalizeTrackText(track?.author);
+  const title = normalizeTrackText(track?.title);
+
+  if (author) {
+    searches.push(["ytmsearch", `${author} radio`]);
+  }
+
+  const sId = spotifyId(track?.uri) || (track?.sourceName === 'spotify' ? track?.identifier : null);
   if (sId) {
     searches.push(["sprec", `seed_tracks=${sId}`]);
   }
-  
+
+  const yId = youtubeId(track?.uri) || (track?.sourceName === 'youtube' ? track?.identifier : null);
   if (yId) {
     searches.push(["ytmsearch", `https://music.youtube.com/watch?v=${yId}&list=RD${yId}`]);
     searches.push(["ytsearch", `https://www.youtube.com/watch?v=${yId}&list=RD${yId}`]);
   }
 
-  const title = normalizeTrackText(track?.title);
-  const author = normalizeTrackText(track?.author);
   const related = [title, author].filter(Boolean).join(" ");
   const mix = author ? `${author} mix` : `${title} mix`;
 
   searches.push(
-    ["ytmsearch", related],
+    ["scsearch", related],
     ["spsearch", related],
-    ["ytsearch", mix],
-    ["dzsearch", related],
-    ["jssearch", related]
+    ["scsearch", mix],
+    ["ytmsearch", related],
+    ["dzsearch", related]
   );
   
   return searches.filter(([, query]) => query);

@@ -90,6 +90,7 @@ process.on("unhandledRejection", (reason, p) => {
 process.on("uncaughtException", (err, origin) => {
   Logger.log(`[Uncaught Exception] ${err}`, "error");
   console.error(origin, err);
+  process.exit(1);
 });
 
 process.on("uncaughtExceptionMonitor", (err, origin) => {
