@@ -21,13 +21,14 @@ const {
 module.exports = {
   name: "voiceStateUpdate",
   run: async (client, oldState, newState) => {
-    const guildId = newState.guild.id;
-    const player = client.manager.players?.get(guildId);
-    const guild = client.guilds.cache.get(guildId)
+    const guildId = newState?.guild?.id || oldState?.guild?.id;
+    if (!guildId) return;
+    const player = client.manager?.players?.get(guildId);
+    const guild = client.guilds?.cache?.get(guildId) || newState?.guild;
 
-    const botId = client.user.id;
-    const botMember = newState.guild.members.cache.get(botId);
-    const botVoiceChannel = botMember?.voice.channel;
+    const botId = client.user?.id;
+    const botMember = guild?.members?.cache?.get(botId);
+    const botVoiceChannel = botMember?.voice?.channel;
 
     if (oldState.id === botId && oldState.channelId && !newState.channelId) {
       try {
@@ -98,27 +99,30 @@ module.exports = {
                 if (existingPlayer.state !== "CONNECTED") {
                   await existingPlayer.connect();
                 }
-
-                const textChannel = client.channels.cache.get(twoFourSeven.TextId);
-                if (textChannel) {
-                  const display = new TextDisplayBuilder()
-                    .setContent(`**${client.emoji.check} Rejoined <#${twoFourSeven.VoiceId}> [247 Mode Active]**`);
-
-                  const container = new ContainerBuilder()
-                    .addTextDisplayComponents(display);
-
-                  textChannel
-                    .send({
-                      components: [container],
-                      flags: MessageFlags.IsComponentsV2
-                    })
-                    .then((msg) =>
-                      setTimeout(() => msg.delete().catch(() => null), 5000)
-                    )
-                    .catch(() => null);
-                }
               } catch (reconnectError) {
-                console.error(`Failed to reconnect existing player:`, reconnectError.message || reconnectError);
+                const message = reconnectError?.message || String(reconnectError);
+                if (!message.includes('already connected')) {
+                  console.error(`Failed to reconnect existing player:`, message);
+                }
+              }
+
+              const textChannel = client.channels.cache.get(twoFourSeven.TextId);
+              if (textChannel) {
+                const display = new TextDisplayBuilder()
+                  .setContent(`**${client.emoji.check} Rejoined <#${twoFourSeven.VoiceId}> [247 Mode Active]**`);
+
+                const container = new ContainerBuilder()
+                  .addTextDisplayComponents(display);
+
+                textChannel
+                  .send({
+                    components: [container],
+                    flags: MessageFlags.IsComponentsV2
+                  })
+                  .then((msg) =>
+                    setTimeout(() => msg.delete().catch(() => null), 5000)
+                  )
+                  .catch(() => null);
               }
             }
             return;
@@ -196,11 +200,19 @@ module.exports = {
       }
     }
 
-    const currentChannel = oldState.channel || newState.channel;
+    if (!player || !player.voiceId) return;
+    const botVoiceId = player.voiceId;
+
+    // Only process if this voice state update affected the bot's current voice channel
+    if (oldState.channelId !== botVoiceId && newState.channelId !== botVoiceId) {
+      return;
+    }
+
+    const currentChannel = guild?.channels?.cache?.get(botVoiceId);
     if (
       player &&
       currentChannel &&
-      currentChannel.type === ChannelType.GuildVoice &&
+      currentChannel.isVoiceBased() &&
       currentChannel.members.has(botId)
     ) {
       const humanCount = currentChannel.members.filter((m) => !m.user.bot).size;
@@ -211,6 +223,10 @@ module.exports = {
         player.data.set('aloneStartTime', Date.now());
 
         await syncVoiceChannelStatus(client, player, { state: "waiting" });
+        try {
+          const { updateNowPlayingButtons } = require("../Players/playerStart");
+          await updateNowPlayingButtons(client, player, true);
+        } catch {}
 
         const textChannel = client.channels.cache.get(player.textId);
         if (textChannel) {
@@ -292,16 +308,16 @@ module.exports = {
         }, 1000 * 60);
 
         player.data.set('aloneTimeout', destroyTimeout);
-      }
-      else if (humanCount > 0 && player.paused && player.data.get('pausedByAlone')) {
+      } else if (
+        humanCount > 0 &&
+        player.paused &&
+        (player.data.get('pausedByAlone') || player.queue?.current)
+      ) {
         const aloneTimeout = player.data.get('aloneTimeout');
         if (aloneTimeout) {
           clearTimeout(aloneTimeout);
           player.data.delete('aloneTimeout');
         }
-
-        const aloneStartTime = player.data.get('aloneStartTime');
-        const aloneTime = aloneStartTime ? Math.floor((Date.now() - aloneStartTime) / 1000) : 0;
 
         player.pause(false);
         player.data.delete('pausedByAlone');
@@ -311,6 +327,10 @@ module.exports = {
         if (currentTrack) {
           await syncVoiceChannelStatus(client, player, { track: currentTrack, state: "playing" });
         }
+        try {
+          const { updateNowPlayingButtons } = require("../Players/playerStart");
+          await updateNowPlayingButtons(client, player, false);
+        } catch {}
 
         const textChannel = client.channels.cache.get(player.textId);
         if (textChannel) {

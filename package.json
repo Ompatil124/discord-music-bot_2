@@ -9,6 +9,7 @@
     "start": "node devrock.js",
     "dev": "node --watch devrock.js",
     "check": "node scripts/check.js",
+    "check:youtube": "node scripts/check-youtube-api.js",
     "test": "node --test"
   },
   "engines": {

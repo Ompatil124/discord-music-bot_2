@@ -18,6 +18,26 @@ module.exports = {
       "ready",
     );
 
+    try {
+      const { sendWebhook } = require("../../utils/webhooks");
+      const readyEmbed = new EmbedBuilder()
+        .setColor(client.color)
+        .setTitle("🟢 Bot Started & Online")
+        .setThumbnail(client.user.displayAvatarURL({ dynamic: true }))
+        .setDescription(
+          `**${client.user.username}** is now online!\n\n` +
+          `**${client.emoji?.dot || "•"} Servers:** \`${client.guilds.cache.size}\`\n` +
+          `**${client.emoji?.dot || "•"} Total Users:** \`${client.users.cache.size}\`\n` +
+          `**${client.emoji?.dot || "•"} Prefix Commands:** \`${client.commands?.size || 0}\`\n` +
+          `**${client.emoji?.dot || "•"} Slash Commands:** \`${client.slashCommands?.size || 0}\`\n` +
+          `**${client.emoji?.dot || "•"} Shard:** \`0 / ${client.clusterInfo?.TOTAL_SHARDS || 1}\``
+        )
+        .setTimestamp();
+      await sendWebhook(client, "system", { embeds: [readyEmbed] });
+    } catch (e) {
+      // Ignore webhook errors
+    }
+
     if (client.slashCommands.size > 0) {
       const rest = new REST({ version: "10" }).setToken(client.token);
       try {

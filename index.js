@@ -5,24 +5,19 @@ process.on('warning', (warning) => {
   }
 });
 
-const fs = require('fs');
-const util = require('util');
-const origLog = console.log;
-const origError = console.error;
-console.log = function() {
-  origLog.apply(console, arguments);
-  fs.appendFileSync('bot.log', '[LOG] ' + util.format.apply(util, arguments) + '\n');
-};
-console.error = function() {
-  origError.apply(console, arguments);
-  fs.appendFileSync('bot.log', '[ERR] ' + util.format.apply(util, arguments) + '\n');
-};
-
 const dns = require("dns");
 dns.setDefaultResultOrder("ipv4first");
 
+const { resilientLookup } = require("./src/utils/dnsResolver");
 const { setGlobalDispatcher, Agent } = require("undici");
-setGlobalDispatcher(new Agent({ connect: { timeout: 30_000 } }));
+setGlobalDispatcher(
+  new Agent({
+    connect: {
+      timeout: 30_000,
+      lookup: resilientLookup,
+    },
+  })
+);
 
 const MusicBot = require("./src/structures/MusicClient");
 const Dokdo = require("dokdo");

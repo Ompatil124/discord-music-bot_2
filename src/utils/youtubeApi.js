@@ -1,5 +1,23 @@
 const axios = require("axios");
 
+const COOLDOWN_MS = 10 * 60 * 1000;
+
+let disabledUntil = 0;
+let lastError = null;
+
+function isYouTubeApiUnavailable() {
+  return Date.now() < disabledUntil;
+}
+
+function getYouTubeApiLastError() {
+  return lastError;
+}
+
+function resetYouTubeApiState() {
+  disabledUntil = 0;
+  lastError = null;
+}
+
 /**
  * Searches YouTube Data API v3 for video results
  * @param {string} query Search term
@@ -9,6 +27,7 @@ const axios = require("axios");
  */
 async function searchYouTubeApi(query, apiKey, maxResults = 10) {
   if (!apiKey || !query || typeof query !== "string" || !query.trim()) return [];
+  if (isYouTubeApiUnavailable()) return [];
 
   try {
     const url = `https://www.googleapis.com/youtube/v3/search`;
@@ -40,7 +59,22 @@ async function searchYouTubeApi(query, apiKey, maxResults = 10) {
         };
       });
   } catch (error) {
-    console.error("[YouTube API] Search error:", error.response?.data?.error?.message || error.message);
+    const status = error.response?.status;
+    const apiError = error.response?.data?.error;
+    const reason = apiError?.errors?.[0]?.reason || apiError?.details?.[0]?.reason || null;
+    const message = apiError?.message || error.message;
+
+    lastError = { status: status || null, reason, message };
+
+    if (status === 403 || status === 429) {
+      disabledUntil = Date.now() + COOLDOWN_MS;
+      console.error(
+        `[YouTube API] Disabled for ${Math.round(COOLDOWN_MS / 60000)} minutes after ${status} ${reason || message}.`
+      );
+      return [];
+    }
+
+    console.error("[YouTube API] Search error:", message);
     return [];
   }
 }
@@ -58,5 +92,8 @@ function decodeHtmlEntities(text) {
 
 module.exports = {
   searchYouTubeApi,
-  decodeHtmlEntities
+  decodeHtmlEntities,
+  isYouTubeApiUnavailable,
+  getYouTubeApiLastError,
+  resetYouTubeApiState,
 };

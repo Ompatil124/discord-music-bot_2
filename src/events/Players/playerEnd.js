@@ -1,17 +1,14 @@
 module.exports = {
   name: "playerEnd",
-  run: async (client, player) => {
+  run: async (client, player, track) => {
     try {
-      const message = player.data.get("nowPlayingMessage");
+      if (track?.title) {
+        client.logger?.log(`[Player] Track ended in guild ${player.guildId}: "${track.title}"`, "debug");
+      }
+      const message = player.data?.get("nowPlayingMessage");
       if (message) {
         await message.delete().catch(() => { });
-        player.data.delete("nowPlayingMessage");
-      }
-      try {
-        const { attemptAutoplay } = require("../../utils/playerUtils");
-        await attemptAutoplay(client, player);
-      } catch (e) {
-        client.logger?.log(`[Autoplay] playerEnd hook error: ${e.message}`, "error");
+        player.data?.delete("nowPlayingMessage");
       }
       if (!player.queue?.current && !player.playing) {
         const { syncVoiceChannelStatus } = require("../../utils/voiceChannelStatus");

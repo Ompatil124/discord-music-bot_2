@@ -44,12 +44,44 @@ function isSameSong(first, second) {
   return Boolean(firstTitle && secondTitle && firstTitle === secondTitle);
 }
 
+function isJunkTrack(track) {
+  if (!track || !track.title) return true;
+  if (track.isStream) return true;
+
+  const length = Number(track.length || track.info?.length || 0);
+  // Real songs are almost always between 60s (1 min) and 11 minutes (660,000ms)
+  // Exclude snippets (<60s) and full concerts / continuous live streams (>11 mins)
+  if (length > 0 && (length < 60_000 || length > 660_000)) {
+    return true;
+  }
+
+  const title = String(track.title || "").toLowerCase();
+
+  // Reject segments, live parts, episodes, podcasts, and non-music clips
+  const junkPatterns = [
+    /\bpart\s*[-–—:]*\s*\d+\b/i,          // "Part - 10", "Part 1", "Part-2"
+    /\b(?:part|pt)\.?\s*\d+\b/i,           // "Pt. 1", "pt 2"
+    /\blive\s*\([^)]*part\s*\d+[^)]*\)/i, // "Live (Part - 10)"
+    /\b(?:episode|ep)\.?\s*\d+\b/i,        // "Episode 5", "Ep 12"
+    /\b(?:podcast|interview|speech|vlog|behind the scenes|making of|teaser|trailer|promo)\b/i,
+    /\b(?:shorts?|reels?|whatsapp status|status video)\b/i,
+    /\b(?:full\s*(?:album|movie|episode|show|concert|event|match))\b/i,
+    /\b(?:jukebox|non[\s-]*stop|mega[\s-]*mix)\b/i
+  ];
+
+  return junkPatterns.some((pattern) => pattern.test(title));
+}
+
 function selectAutoplayCandidate(source, tracks, recentKeys = []) {
   if (!Array.isArray(tracks) || tracks.length === 0) return null;
   const blocked = new Set(recentKeys);
 
+  // Filter out junk/live segments/episodes so only actual music songs are queued
+  const validTracks = tracks.filter((track) => track?.title && !isJunkTrack(track));
+  const pool = validTracks.length > 0 ? validTracks : tracks;
+
   // 1. Try finding a fresh track not in recent history
-  const freshCandidate = tracks.find((track) =>
+  const freshCandidate = pool.find((track) =>
     track?.title &&
     !isSameSong(source, track) &&
     !trackKeys(track).some((key) => blocked.has(key))
@@ -58,7 +90,7 @@ function selectAutoplayCandidate(source, tracks, recentKeys = []) {
   if (freshCandidate) return freshCandidate;
 
   // 2. Fallback: pick any track that isn't the exact same track currently playing
-  return tracks.find((track) => track?.title && !isSameSong(source, track)) || tracks[0] || null;
+  return pool.find((track) => track?.title && !isSameSong(source, track)) || pool[0] || null;
 }
 
 function buildAutoplaySearches(track) {
@@ -68,6 +100,7 @@ function buildAutoplaySearches(track) {
 
   if (author) {
     searches.push(["ytmsearch", `${author} radio`]);
+    searches.push(["ytmsearch", `${author} top tracks`]);
   }
 
   const sId = spotifyId(track?.uri) || (track?.sourceName === 'spotify' ? track?.identifier : null);
@@ -82,13 +115,11 @@ function buildAutoplaySearches(track) {
   }
 
   const related = [title, author].filter(Boolean).join(" ");
-  const mix = author ? `${author} mix` : `${title} mix`;
 
   searches.push(
-    ["scsearch", related],
-    ["spsearch", related],
-    ["scsearch", mix],
     ["ytmsearch", related],
+    ["spsearch", related],
+    ["scsearch", related],
     ["dzsearch", related]
   );
   
@@ -102,6 +133,7 @@ function rememberTracks(existing, tracks, limit = 40) {
 
 module.exports = {
   buildAutoplaySearches,
+  isJunkTrack,
   isSameSong,
   normalizeTrackText,
   rememberTracks,

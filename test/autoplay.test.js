@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   buildAutoplaySearches,
+  isJunkTrack,
   isSameSong,
   rememberTracks,
   selectAutoplayCandidate,
@@ -63,4 +64,37 @@ test("autoplay queues a different recommendation and starts it", async () => {
   assert.deepEqual(queued, [next]);
   assert.equal(started, true);
   assert.equal(searches[0], "ariana grande radio");
+});
+
+test("autoplay filters out live parts, episodes, and non-song content", () => {
+  const livePart = { identifier: "p1", title: "Chandan Kamble Live (Part - 10)", author: "Chandan Kamble", length: 300_000 };
+  const shortClip = { identifier: "p2", title: "Promo Teaser", author: "Artist", length: 30_000 };
+  const marathon = { identifier: "p3", title: "Nonstop 2 Hour Mix", author: "DJ", length: 7_200_000 };
+  const realSong = { identifier: "s1", title: "Majha Kanhoba", author: "Chandan Kamble", length: 240_000 };
+
+  assert.equal(isJunkTrack(livePart), true);
+  assert.equal(isJunkTrack(shortClip), true);
+  assert.equal(isJunkTrack(marathon), true);
+  assert.equal(isJunkTrack(realSong), false);
+
+  const selected = selectAutoplayCandidate(source, [livePart, shortClip, realSong]);
+  assert.equal(selected, realSong);
+});
+
+test("autoplay does not run when queue has pending tracks", async () => {
+  const queued = [];
+  let started = false;
+  const player = {
+    guildId: "guild",
+    playing: false,
+    paused: false,
+    loop: "none",
+    data: new Map([["autoplay", true], ["lastTrack", source]]),
+    queue: { size: 1, add: (track) => queued.push(track) },
+    search: async () => ({ tracks: [] }),
+    play: async () => { started = true; },
+  };
+  await attemptAutoplay({ user: { id: "bot" }, logger: { log() {} } }, player);
+  assert.equal(queued.length, 0);
+  assert.equal(started, false);
 });

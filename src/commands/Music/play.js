@@ -54,8 +54,10 @@ module.exports = {
 
     try {
       if (client.config?.youtubeAPIKey) {
-        const { searchYouTubeApi } = require("../../utils/youtubeApi");
-        const apiTracks = await searchYouTubeApi(focusedValue, client.config.youtubeAPIKey, 10);
+        const { searchYouTubeApi, isYouTubeApiUnavailable } = require("../../utils/youtubeApi");
+        const apiTracks = isYouTubeApiUnavailable()
+          ? []
+          : await searchYouTubeApi(focusedValue, client.config.youtubeAPIKey, 10);
         if (apiTracks.length > 0) {
           const choices = apiTracks.slice(0, 25).map(track => {
             const title = (track.title || 'Unknown').substring(0, 75);
@@ -217,6 +219,7 @@ module.exports = {
         }
       } else {
         if (player.voiceId !== channel.id) {
+          console.log(`[Play] Voice channel mismatch in guild ${player.guildId}: player=${player.voiceId} requested=${channel.id}`);
           const errorDisplay = new TextDisplayBuilder()
             .setContent(`**${client.emoji.warn} I'm already connected to a different voice channel.**`);
 
@@ -245,8 +248,10 @@ module.exports = {
       // If text search and YouTube API key exists, resolve exact track title from official API
       if (!isUrl && client.config?.youtubeAPIKey) {
         try {
-          const { searchYouTubeApi } = require("../../utils/youtubeApi");
-          const apiTracks = await searchYouTubeApi(query, client.config.youtubeAPIKey, 1);
+          const { searchYouTubeApi, isYouTubeApiUnavailable } = require("../../utils/youtubeApi");
+          const apiTracks = isYouTubeApiUnavailable()
+            ? []
+            : await searchYouTubeApi(query, client.config.youtubeAPIKey, 1);
           if (apiTracks.length > 0 && apiTracks[0].title) {
             console.log(`[YouTube API] Resolved "${query}" -> "${apiTracks[0].title}"`);
             query = apiTracks[0].title;
@@ -659,8 +664,10 @@ module.exports = {
       // If text search and YouTube API key exists, resolve exact track title from official API
       if (!isUrl && client.config?.youtubeAPIKey) {
         try {
-          const { searchYouTubeApi } = require("../../utils/youtubeApi");
-          const apiTracks = await searchYouTubeApi(query, client.config.youtubeAPIKey, 1);
+          const { searchYouTubeApi, isYouTubeApiUnavailable } = require("../../utils/youtubeApi");
+          const apiTracks = isYouTubeApiUnavailable()
+            ? []
+            : await searchYouTubeApi(query, client.config.youtubeAPIKey, 1);
           if (apiTracks.length > 0 && apiTracks[0].title) {
             console.log(`[YouTube API] Resolved "${query}" -> "${apiTracks[0].title}"`);
             query = apiTracks[0].title;
@@ -845,6 +852,7 @@ module.exports = {
         }
       } else {
         if (player.voiceId !== channel.id) {
+          console.log(`[Play] Voice channel mismatch in guild ${player.guildId}: player=${player.voiceId} requested=${channel.id}`);
           const errorDisplay = new TextDisplayBuilder()
             .setContent(`**${client.emoji.warn} I'm already connected to a different voice channel.**`);
 
@@ -992,33 +1000,6 @@ module.exports = {
       }
 
       if (player && !player.playing && !player.paused) {
-        const lastActivity = player.data?.get('lastActivityTime') || player.data?.get('monitorStartTime');
-        const idleDuration = lastActivity ? Date.now() - lastActivity : 0;
-
-        if (idleDuration > 5 * 60 * 1000) {
-          try {
-            const { getVoiceConnection } = require('@discordjs/voice');
-            const connection = getVoiceConnection(message.guild.id);
-
-            if (connection) {
-              connection.rejoin({
-                channelId: channel.id,
-                selfDeaf: true,
-                selfMute: false,
-              });
-
-              client.logger?.log(
-                `[Play] Refreshed stale voice connection for guild ${message.guild.id}`,
-                'info'
-              );
-            }
-          } catch (refreshError) {
-            console.error('Failed to refresh connection:', refreshError);
-          }
-        }
-      }
-
-      if (!player.playing && !player.paused) {
         await player.play();
       }
 

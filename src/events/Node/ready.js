@@ -2,10 +2,33 @@
 
 const db = require("../../schema/247");
 
+let autoReconnectStarted = false;
+
 module.exports = {
   name: "ready",
   run: async (client, name) => {
     client.logger.log(`Lavalink "${name}" connected.`, "ready");
+
+    try {
+      const { sendWebhook } = require("../../utils/webhooks");
+      const { EmbedBuilder } = require("discord.js");
+      const nodeEmbed = new EmbedBuilder()
+        .setColor("#57F287")
+        .setTitle("🎵 Lavalink Node Connected")
+        .setDescription(
+          `**${client.emoji?.dot || "•"} Node:** \`${name}\`\n` +
+          `**${client.emoji?.dot || "•"} Status:** Online & Ready for Playback\n` +
+          `**${client.emoji?.dot || "•"} Timestamp:** <t:${Math.floor(Date.now() / 1000)}:R>`
+        )
+        .setTimestamp();
+      await sendWebhook(client, "system", { embeds: [nodeEmbed] });
+    } catch (e) {
+      // Ignore webhook errors
+    }
+
+    if (autoReconnectStarted) return;
+    autoReconnectStarted = true;
+
     client.logger.log("Auto Reconnect Collecting player 24/7 data", "log");
 
     const maindata = await db.find();

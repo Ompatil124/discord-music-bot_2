@@ -22,7 +22,9 @@ async function refreshNowPlayingMessage(client, player, options = {}) {
     });
   } catch (error) {
     player.data?.delete("nowPlayingMessage");
-    client.logger?.log(`[Player] Could not refresh controls: ${error.message}`, "warn");
+    if (error.code !== 10008 && !error.message?.includes("Unknown Message")) {
+      client.logger?.log(`[Player] Could not refresh controls: ${error.message}`, "warn");
+    }
   }
 }
 
@@ -74,10 +76,28 @@ module.exports = {
       };
       if (banner) payload.files = [new AttachmentBuilder(banner, { name: BANNER_NAME })];
 
-      const message = await channel.send(payload);
-      player.data.set("nowPlayingMessage", message);
+      let message;
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          message = await channel.send(payload);
+          break;
+        } catch (sendError) {
+          if (
+            attempt === 1 &&
+            (sendError.code === "ENOTFOUND" ||
+              sendError.code === "EAI_AGAIN" ||
+              sendError.message?.includes("ENOTFOUND"))
+          ) {
+            client.logger?.log(`[Player] DNS/Network glitch sending card, retrying in 1.5s...`, "warn");
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+            continue;
+          }
+          throw sendError;
+        }
+      }
+      if (message) player.data.set("nowPlayingMessage", message);
     } catch (error) {
-      client.logger?.log(`[Player] Could not send now-playing card: ${error.stack || error.message}`, "error");
+      client.logger?.log(`[Player] Could not send now-playing card: ${error.message || error}`, "warn");
     }
   },
   refreshNowPlayingMessage,

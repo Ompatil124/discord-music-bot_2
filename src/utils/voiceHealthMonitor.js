@@ -2,7 +2,7 @@ class VoiceHealthMonitor {
     constructor(client) {
         this.client = client;
         this.healthChecks = new Map();
-        this.CHECK_INTERVAL = 3 * 60 * 1000;
+        this.CHECK_INTERVAL = 30 * 1000;
         this.IDLE_THRESHOLD = 10 * 60 * 1000;
     }
 
@@ -195,6 +195,33 @@ class VoiceHealthMonitor {
 
             if (player.playing && player.queue?.current) {
                 await this.updateVoiceState(player, player.queue.current);
+
+                // Playback progress watchdog: detect frozen/stalled audio streams
+                const currentTrack = player.queue.current;
+                const position = player.position || 0;
+                const duration = currentTrack.length || 0;
+
+                if (duration > 0 && !currentTrack.isStream) {
+                    const lastPos = player.data?.get('watchdogLastPosition');
+                    const lastPosTime = player.data?.get('watchdogLastTime') || Date.now();
+
+                    // If position has not moved for > 45s while marked as playing
+                    if (lastPos !== undefined && Math.abs(position - lastPos) < 500 && (Date.now() - lastPosTime) > 45_000) {
+                        this.client.logger?.log(
+                            `[VoiceHealth] Track "${currentTrack.title}" frozen in ${player.guildId} (position ${position}ms unchanged for 45s). Auto-skipping...`,
+                            'warn'
+                        );
+                        player.data?.delete('watchdogLastPosition');
+                        player.data?.delete('watchdogLastTime');
+                        await player.skip().catch(() => {});
+                        return;
+                    }
+
+                    if (lastPos === undefined || Math.abs(position - lastPos) >= 500) {
+                        player.data?.set('watchdogLastPosition', position);
+                        player.data?.set('watchdogLastTime', Date.now());
+                    }
+                }
             }
 
         } catch (error) {
